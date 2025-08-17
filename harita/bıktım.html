@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kat Planı Navigatörü</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 1200px; /* Daha geniş bir alan için max-width artırıldı */
+            width: 95%; /* Responsive olması için yüzde tabanlı genişlik */
+        }
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            max-width: 100%; /* Tam ekran genişliği için max-width ayarı */
+            margin-top: 20px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        canvas {
+            display: block;
+            background-color: #f8fafc;
+            /* Canvas'ın CSS boyutları, internal çözünürlüğünden bağımsız olarak esnek olacak */
+            width: 100%;
+            height: auto; /* Yüksekliği otomatik ayarla */
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 20px;
+            justify-content: center;
+        }
+        .button {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .button-primary {
+            background-color: #4f46e5;
+            color: white;
+        }
+        .button-primary:hover {
+            background-color: #4338ca;
+            transform: translateY(-1px);
+        }
+        .button-secondary {
+            background-color: #e0e7ff;
+            color: #4f46e5;
+        }
+        .button-secondary:hover {
+            background-color: #c7d2fe;
+            transform: translateY(-1px);
+        }
+        .button-red {
+            background-color: #ef4444;
+            color: white;
+        }
+        .button-red:hover {
+            background-color: #dc2626;
+            transform: translateY(-1px);
+        }
+        .message-box {
+            background-color: #fefcbf;
+            border: 1px solid #fbd38d;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 20px;
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+            font-size: 0.9em;
+            color: #92400e;
+        }
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .modal-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-3xl font-bold text-gray-800 mb-4">Kat Planı Navigatörü</h1>
+        <p class="text-gray-600 mb-6 text-center">Yüklediğiniz görsel üzerinde odaları ve koridorları işaretleyebilir, ardından rota oluşturabilirsiniz.</p>
+
+        <div class="flex flex-col items-center">
+            <input type="file" id="imageUpload" accept="image/*" class="mb-4 p-2 border border-gray-300 rounded-md">
+            <div id="image-preview" class="mb-4">
+                <!-- Yüklenen görselin src'si otomatik olarak güncellenecek, başlangıçta kullanıcıdan gelen görsel -->
+                <img id="uploadedImage" src="uploaded:5.KAT TEMİZ-Layout1.jpg-21ab5921-28db-44f5-9639-a719fe28e212" alt="Yüklenen Kat Planı" class="hidden w-full h-auto max-h-96 object-contain rounded-lg shadow-md">
+                <p id="noImageText" class="text-gray-500">Lütfen bir kat planı görseli yükleyin.</p>
+            </div>
+        </div>
+        
+        <div class="canvas-container">
+            <canvas id="floorPlanCanvas" class="hidden"></canvas>
+        </div>
+
+        <div class="controls">
+            <button id="addNodeBtn" class="button button-primary">Nokta Ekle</button>
+            <button id="addPathBtn" class="button button-secondary">Yol Ekle</button>
+            <button id="setStartBtn" class="button button-primary">Başlangıç Seç</button>
+            <button id="setEndBtn" class="button button-primary">Bitiş Seç</button>
+            <button id="findRouteBtn" class="button button-red">Rota Oluştur</button>
+            <button id="saveGraphBtn" class="button button-primary">Grafiği Kaydet</button>
+            <button id="loadGraphBtn" class="button button-secondary">Grafiği Yükle</button>
+            <button id="exportBtn" class="button button-secondary">JSON Dışa Aktar</button>
+            <button id="clearAllBtn" class="button button-secondary">Temizle</button>
+        </div>
+        <div class="save-info" style="margin-top: 10px; font-size: 0.9em; color: #666;">
+            <span id="saveStatus">Durum: Hazır</span> | 
+            <span id="nodeCount">Düğümler: 0</span> | 
+            <span id="pathCount">Yollar: 0</span>
+        </div>
+        <div id="messageBox" class="message-box hidden"></div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Canvas ve görsel elementleri
+        const canvas = document.getElementById('floorPlanCanvas');
+        const ctx = canvas.getContext('2d');
+        const imageUpload = document.getElementById('imageUpload');
+        const uploadedImage = document.getElementById('uploadedImage');
+        const noImageText = document.getElementById('noImageText');
+        const imagePreview = document.getElementById('image-preview');
+        const messageBox = document.getElementById('messageBox');
+
+        // Butonlar
+        const addNodeBtn = document.getElementById('addNodeBtn');
+        const addPathBtn = document.getElementById('addPathBtn');
+        const setStartBtn = document.getElementById('setStartBtn');
+        const setEndBtn = document.getElementById('setEndBtn');
+        const findRouteBtn = document.getElementById('findRouteBtn');
+        const saveGraphBtn = document.getElementById('saveGraphBtn');
+        const loadGraphBtn = document.getElementById('loadGraphBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        const clearAllBtn = document.getElementById('clearAllBtn');
+
+        // Durum göstergeleri
+        const saveStatus = document.getElementById('saveStatus');
+        const nodeCount = document.getElementById('nodeCount');
+        const pathCount = document.getElementById('pathCount');
+
+        let floorPlanImage = new Image();
+        let nodes = []; // Odalar ve koridor kesişim noktaları
+        let paths = []; // Noktalar arasındaki bağlantılar (yollar)
+        let startNode = null;
+        let endNode = null;
+        let currentMode = null; // 'addNode', 'addPath', 'setStart', 'setEnd'
+        let firstPathNode = null; // Yol eklerken ilk seçilen nokta
+
+        // Firebase ile ilgili global değişkenler
+        let app;
+        let db;
+        let auth;
+        let userId;
+        let appId;
+
+        // Mesaj kutusunu gösteren fonksiyon
+        function showMessage(message, type = 'info') {
+            messageBox.textContent = message;
+            messageBox.className = `message-box mt-4 p-3 rounded-lg text-sm transition-all duration-300 ease-in-out ${
+                type === 'info' ? 'bg-blue-100 text-blue-700 border-blue-300' :
+                type === 'success' ? 'bg-green-100 text-green-700 border-green-300' :
+                'bg-red-100 text-red-700 border-red-300'
+            }`;
+            messageBox.classList.remove('hidden');
+            setTimeout(() => {
+                messageBox.classList.add('hidden');
+            }, 5000); // 5 saniye sonra gizle
+        }
+
+        // Modalı gösteren fonksiyon
+        function showModal(message, type = 'alert', onConfirm = null) {
+            const modalDiv = document.createElement('div');
+            modalDiv.className = 'modal';
+            modalDiv.innerHTML = `
+                <div class="modal-content">
+                    <p class="text-lg text-gray-800">${message}</p>
+                    <div class="modal-buttons">
+                        ${type === 'confirm' ? `
+                            <button id="modalConfirmBtn" class="button button-primary">Evet</button>
+                            <button id="modalCancelBtn" class="button button-secondary">İptal</button>
+                        ` : `
+                            <button id="modalOkBtn" class="button button-primary">Tamam</button>
+                        `}
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modalDiv);
+
+            if (type === 'confirm') {
+                document.getElementById('modalConfirmBtn').onclick = () => {
+                    if (onConfirm) onConfirm();
+                    modalDiv.remove();
+                };
+                document.getElementById('modalCancelBtn').onclick = () => modalDiv.remove();
+            } else {
+                document.getElementById('modalOkBtn').onclick = () => modalDiv.remove();
+            }
+        }
+
+        // Canvas'ı çizme fonksiyonu
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (floorPlanImage.src) {
+                // Canvas'ı orijinal görsel boyutunda çiziyoruz
+                ctx.drawImage(floorPlanImage, 0, 0, canvas.width, canvas.height);
+            }
+
+            // Yolları çiz
+            paths.forEach(path => {
+                const node1 = nodes[path[0]];
+                const node2 = nodes[path[1]];
+                if (node1 && node2) {
+                    ctx.beginPath();
+                    ctx.moveTo(node1.x, node1.y);
+                    ctx.lineTo(node2.x, node2.y);
+                    ctx.strokeStyle = '#6366f1'; // Mor renk
+                    ctx.lineWidth = 4;
+                    ctx.stroke();
+                }
+            });
+
+            // Noktaları çiz
+            nodes.forEach((node, index) => {
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, 8, 0, Math.PI * 2);
+                ctx.fillStyle = '#10b981'; // Yeşil
+                ctx.fill();
+                ctx.strokeStyle = '#047857';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.fillStyle = 'white';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(index + 1, node.x, node.y); // Nokta numarasını göster
+            });
+
+            // Başlangıç ve bitiş noktalarını özel çiz
+            if (startNode !== null) {
+                ctx.beginPath();
+                ctx.arc(startNode.x, startNode.y, 10, 0, Math.PI * 2);
+                ctx.fillStyle = '#3b82f6'; // Mavi
+                ctx.fill();
+                ctx.strokeStyle = '#1d4ed8';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                ctx.fillStyle = 'white';
+                ctx.font = '14px Arial';
+                ctx.fillText('B', startNode.x, startNode.y);
+            }
+
+            if (endNode !== null) {
+                ctx.beginPath();
+                ctx.arc(endNode.x, endNode.y, 10, 0, Math.PI * 2);
+                ctx.fillStyle = '#ef4444'; // Kırmızı
+                ctx.fill();
+                ctx.strokeStyle = '#b91c1c';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                ctx.fillStyle = 'white';
+                ctx.font = '14px Arial';
+                ctx.fillText('S', endNode.x, endNode.y);
+            }
+            
+            // Durum güncellemesi
+            updateStatusDisplay();
+        }
+
+        // Görsel yüklendiğinde
+        floorPlanImage.onload = function() {
+            // Canvas'ın internal (çizim) çözünürlüğünü görselin doğal boyutlarına ayarla
+            canvas.width = floorPlanImage.naturalWidth;
+            canvas.height = floorPlanImage.naturalHeight;
+
+            // Görseli önizlemede göster
+            uploadedImage.src = floorPlanImage.src;
+            uploadedImage.classList.remove('hidden');
+            noImageText.classList.add('hidden');
+            canvas.classList.remove('hidden');
+            draw(); // Görsel yüklendikten sonra canvas'ı tekrar çiz
+        };
+
+        // Kullanıcının yüklediği görseli işle
+        imageUpload.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    floorPlanImage.src = event.target.result;
+                    // Yeni görsel yüklendiğinde mevcut verileri temizle
+                    nodes = [];
+                    paths = [];
+                    startNode = null;
+                    endNode = null;
+                    currentMode = null;
+                    firstPathNode = null;
+                    draw();
+                    showMessage('Görsel yüklendi. Nokta ekleyerek başlayabilirsiniz.', 'success');
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Tıklama olaylarını yönetme
+        canvas.addEventListener('click', function(e) {
+            if (!floorPlanImage.src || floorPlanImage.naturalWidth === 0) {
+                showMessage('Lütfen önce bir kat planı görseli yükleyin.', 'error');
+                return;
+            }
+
+            // Canvas'ın HTML boyutu ile gerçek çizim boyutu arasındaki oranı hesapla
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+
+            if (currentMode === 'addNode') {
+                nodes.push({ x: x, y: y });
+                draw();
+                trackChange();
+                showMessage(`Nokta eklendi. Toplam ${nodes.length} nokta var.`, 'success');
+            } else if (currentMode === 'addPath') {
+                const clickedNodeIndex = getNodeAt(x, y);
+                if (clickedNodeIndex !== -1) {
+                    if (firstPathNode === null) {
+                        firstPathNode = clickedNodeIndex;
+                        showMessage(`İlk nokta seçildi: ${clickedNodeIndex + 1}. Şimdi ikinci noktayı seçin.`, 'info');
+                    } else {
+                        if (firstPathNode === clickedNodeIndex) {
+                            showMessage('Aynı noktayı seçemezsiniz. Lütfen farklı bir nokta seçin.', 'error');
+                            firstPathNode = null;
+                            return;
+                        }
+                        // Yolun zaten var olup olmadığını kontrol et
+                        const pathExists = paths.some(p => 
+                            (p[0] === firstPathNode && p[1] === clickedNodeIndex) ||
+                            (p[1] === firstPathNode && p[0] === clickedNodeIndex)
+                        );
+
+                        if (pathExists) {
+                            showMessage('Bu yol zaten var.', 'error');
+                        } else {
+                            paths.push([firstPathNode, clickedNodeIndex]);
+                            trackChange();
+                            showMessage(`Yol eklendi: ${firstPathNode + 1} - ${clickedNodeIndex + 1}.`, 'success');
+                        }
+                        firstPathNode = null;
+                        draw();
+                    }
+                } else {
+                    showMessage('Yol eklemek için bir noktaya tıklamalısınız.', 'error');
+                }
+            } else if (currentMode === 'setStart') {
+                const clickedNodeIndex = getNodeAt(x, y);
+                if (clickedNodeIndex !== -1) {
+                    startNode = nodes[clickedNodeIndex];
+                    draw();
+                    showMessage(`Başlangıç noktası seçildi: ${clickedNodeIndex + 1}.`, 'success');
+                } else {
+                    showMessage('Başlangıç noktası seçmek için bir noktaya tıklamalısınız.', 'error');
+                }
+            } else if (currentMode === 'setEnd') {
+                const clickedNodeIndex = getNodeAt(x, y);
+                if (clickedNodeIndex !== -1) {
+                    endNode = nodes[clickedNodeIndex];
+                    draw();
+                    showMessage(`Bitiş noktası seçildi: ${clickedNodeIndex + 1}.`, 'success');
+                } else {
+                    showMessage('Bitiş noktası seçmek için bir noktaya tıklamalısınız.', 'error');
+                }
+            }
+            // Durum güncellemesi
+            updateStatusDisplay();
+        });
+
+        // Tıklanan noktanın indeksini döndürür, yoksa -1
+        function getNodeAt(x, y) {
+            for (let i = 0; i < nodes.length; i++) {
+                const node = nodes[i];
+                const dist = Math.sqrt((x - node.x)**2 + (y - node.y)**2);
+                if (dist < 10) { // Nokta yarıçapı 8, tıklama için biraz tolerans
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        // Mod butonları olayları
+        addNodeBtn.addEventListener('click', () => {
+            currentMode = 'addNode';
+            showMessage('Nokta ekleme modu aktif. Haritada odaların/koridorların kesişim noktalarına tıklayın.', 'info');
+        });
+
+        addPathBtn.addEventListener('click', () => {
+            if (nodes.length < 2) {
+                showMessage('Yol eklemek için en az iki nokta olmalı. Önce nokta ekleyin.', 'error');
+                return;
+            }
+            currentMode = 'addPath';
+            firstPathNode = null; // Her yeni yol eklemede ilk seçimi sıfırla
+            showMessage('Yol ekleme modu aktif. Bağlamak istediğiniz iki noktayı sırasıyla tıklayın.', 'info');
+        });
+
+        setStartBtn.addEventListener('click', () => {
+            if (nodes.length === 0) {
+                showMessage('Başlangıç noktası seçmek için önce nokta eklemelisiniz.', 'error');
+                return;
+            }
+            currentMode = 'setStart';
+            showMessage('Başlangıç noktası seçme modu aktif. Başlangıç noktanızı tıklayın.', 'info');
+        });
+
+        setEndBtn.addEventListener('click', () => {
+            if (nodes.length === 0) {
+                showMessage('Bitiş noktası seçmek için önce nokta eklemelisiniz.', 'error');
+                return;
+            }
+            currentMode = 'setEnd';
+            showMessage('Bitiş noktası seçme modu aktif. Bitiş noktanızı tıklayın.', 'info');
+        });
+
+        // Rota bulma (Basit BFS algoritması)
+        findRouteBtn.addEventListener('click', () => {
+            if (!startNode || !endNode) {
+                showMessage('Rota oluşturmak için başlangıç ve bitiş noktalarını seçmelisiniz.', 'error');
+                return;
+            }
+            const startIndex = nodes.indexOf(startNode);
+            const endIndex = nodes.indexOf(endNode);
+
+            if (startIndex === -1 || endIndex === -1) {
+                showMessage('Seçilen başlangıç veya bitiş noktaları mevcut noktalarda bulunamadı.', 'error');
+                return;
+            }
+            if (nodes.length === 0 || paths.length === 0) {
+                showMessage('Rota oluşturmak için en az iki nokta ve bir yol olmalı.', 'error');
+                return;
+            }
+
+            // Komşuluk listesi oluştur
+            const adj = new Array(nodes.length).fill(0).map(() => []);
+            paths.forEach(p => {
+                adj[p[0]].push(p[1]);
+                adj[p[1]].push(p[0]); // Çift yönlü yollar
+            });
+
+            const queue = [[startIndex, [startIndex]]]; // [current_node, path_to_current_node]
+            const visited = new Set();
+            visited.add(startIndex);
+
+            let shortestPath = null;
+
+            while (queue.length > 0) {
+                const [currentNode, currentPath] = queue.shift();
+
+                if (currentNode === endIndex) {
+                    shortestPath = currentPath;
+                    break;
+                }
+
+                for (const neighbor of adj[currentNode]) {
+                    if (!visited.has(neighbor)) {
+                        visited.add(neighbor);
+                        queue.push([neighbor, [...currentPath, neighbor]]);
+                    }
+                }
+            }
+
+            if (shortestPath) {
+                draw(); // Önce mevcut durumu temizleyip tekrar çiz
+
+                // Rotayı çiz
+                ctx.strokeStyle = '#ef4444'; // Kırmızı rota
+                ctx.lineWidth = 6;
+                ctx.setLineDash([10, 5]); // Kesikli çizgi
+                ctx.lineCap = 'round'; // Çizgi uçlarını yuvarla
+
+                for (let i = 0; i < shortestPath.length - 1; i++) {
+                    const node1 = nodes[shortestPath[i]];
+                    const node2 = nodes[shortestPath[i + 1]];
+                    ctx.beginPath();
+                    ctx.moveTo(node1.x, node1.y);
+                    ctx.lineTo(node2.x, node2.y);
+                    ctx.stroke();
+                }
+                ctx.setLineDash([]); // Çizgi stilini sıfırla
+                showMessage(`Rota başarıyla oluşturuldu: ${shortestPath.map(n => n + 1).join(' -> ')}`, 'success');
+            } else {
+                showMessage('Bu iki nokta arasında bir rota bulunamadı. Yollarınızı kontrol edin.', 'error');
+                draw(); // Yolu bulamazsa sadece mevcut haritayı tekrar çiz
+            }
+        });
+
+        // Tüm verileri temizle
+        clearAllBtn.addEventListener('click', () => {
+            showModal('Tüm noktaları, yolları ve rota seçimlerini temizlemek istediğinizden emin misiniz?', 'confirm', () => {
+                nodes = [];
+                paths = [];
+                startNode = null;
+                endNode = null;
+                currentMode = null;
+                firstPathNode = null;
+                draw();
+                updateStatusDisplay();
+                showMessage('Tüm veriler temizlendi.', 'info');
+            });
+        });
+
+        // JSON Dışa Aktarma
+        exportBtn.addEventListener('click', () => {
+            const exportData = {
+                nodes: nodes,
+                paths: paths,
+                startNodeIndex: startNode ? nodes.indexOf(startNode) : null,
+                endNodeIndex: endNode ? nodes.indexOf(endNode) : null,
+                imageUrl: floorPlanImage.src,
+                exportDate: new Date().toISOString(),
+                version: '1.1'
+            };
+
+            const dataStr = JSON.stringify(exportData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `harita_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            showMessage('Veriler JSON dosyası olarak indirildi!', 'success');
+        });
+
+        // Durum güncellemesi fonksiyonu
+        function updateStatusDisplay() {
+            if (nodeCount) nodeCount.textContent = `Düğümler: ${nodes.length}`;
+            if (pathCount) pathCount.textContent = `Yollar: ${paths.length}`;
+            if (saveStatus) {
+                const hasUnsavedChanges = nodes.length > 0 || paths.length > 0;
+                saveStatus.textContent = hasUnsavedChanges ? 'Durum: Kaydedilmemiş değişiklikler' : 'Durum: Hazır';
+            }
+        }
+
+        // Otomatik kayıt fonksiyonu
+        let autoSaveInterval;
+        let lastChangeTime = 0;
+
+        function startAutoSave() {
+            autoSaveInterval = setInterval(() => {
+                if (Date.now() - lastChangeTime > 30000 && (nodes.length > 0 || paths.length > 0)) { // 30 saniye sonra
+                    autoSaveGraphData();
+                }
+            }, 10000); // Her 10 saniyede kontrol et
+        }
+
+        async function autoSaveGraphData() {
+            if (!db || !userId || !appId) return;
+
+            try {
+                const graphData = {
+                    nodes: nodes,
+                    paths: paths,
+                    startNodeIndex: startNode ? nodes.indexOf(startNode) : null,
+                    endNodeIndex: endNode ? nodes.indexOf(endNode) : null,
+                    imageUrl: floorPlanImage.src,
+                    timestamp: new Date().toISOString(),
+                    autoSave: true
+                };
+
+                const docRef = doc(db, `artifacts/${appId}/users/${userId}/floorPlanData/autoSave_${Date.now()}`);
+                await setDoc(docRef, graphData);
+                
+                if (saveStatus) saveStatus.textContent = 'Durum: Otomatik kaydedildi';
+                console.log('Auto-saved successfully');
+            } catch (e) {
+                console.warn('Auto-save failed:', e);
+            }
+        }
+
+        // Değişiklik takibi
+        function trackChange() {
+            lastChangeTime = Date.now();
+            updateStatusDisplay();
+        }
+
+        // Fonksiyon: Grafik verilerini Firestore'a kaydet
+        async function saveGraphData() {
+            // Önce localStorage'a kaydet (her zaman çalışır)
+            const graphData = {
+                nodes: nodes,
+                paths: paths,
+                startNodeIndex: startNode ? nodes.indexOf(startNode) : null,
+                endNodeIndex: endNode ? nodes.indexOf(endNode) : null,
+                imageUrl: floorPlanImage.src,
+                timestamp: new Date().toISOString(),
+                nodeCount: nodes.length,
+                pathCount: paths.length,
+                description: `${nodes.length} düğüm, ${paths.length} yol - ${new Date().toLocaleString('tr-TR')}`
+            };
+
+            // LocalStorage'a kaydet
+            try {
+                localStorage.setItem('floorPlanData', JSON.stringify(graphData));
+                localStorage.setItem('floorPlanBackup', JSON.stringify(graphData));
+                showMessage(`Veriler yerel olarak kaydedildi! ${graphData.description}`, 'success');
+                console.log('Data saved to localStorage');
+            } catch (e) {
+                console.error('LocalStorage kayıt hatası:', e);
+                showMessage('Yerel kayıt başarısız!', 'error');
+                return;
+            }
+
+            // Firebase'e kaydetmeyi dene (isteğe bağlı)
+            if (db && userId && appId) {
+                try {
+                    // Ana kayıt
+                    const docRef = doc(db, `artifacts/${appId}/users/${userId}/floorPlanData/currentGraph`);
+                    await setDoc(docRef, graphData);
+                    
+                    // Geçmiş kayıt
+                    const historyRef = doc(db, `artifacts/${appId}/users/${userId}/floorPlanData/history/save_${Date.now()}`);
+                    await setDoc(historyRef, {
+                        ...graphData,
+                        saveType: 'manual',
+                        saveNote: `Manuel kayıt - ${graphData.description}`
+                    });
+                    
+                    showMessage(`Veriler hem yerel hem de bulutta kaydedildi! ${graphData.description}`, 'success');
+                    console.log('Data saved to both localStorage and Firebase');
+                } catch (e) {
+                    console.error('Firebase kayıt hatası:', e);
+                    showMessage(`Veriler yerel olarak kaydedildi (bulut kaydı başarısız). ${graphData.description}`, 'success');
+                }
+            }
+
+            // Otomatik kayıt sayacını sıfırla
+            lastChangeTime = Date.now();
+        }
+                showMessage('Grafik verileri kaydedilemedi: ' + e.message, 'error');
+            }
+        }
+
+        // Fonksiyon: Grafik verilerini Firestore'dan yükle
+        async function loadGraphData() {
+            if (!db || !userId || !appId) {
+                showMessage('Veritabanı bağlantısı yok veya kullanıcı kimliği belirlenemedi. Yüklenemedi.', 'error');
+                return;
+            }
+
+            const docRef = doc(db, `artifacts/${appId}/users/${userId}/floorPlanData/currentGraph`);
+            try {
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    nodes = data.nodes || [];
+                    paths = data.paths || [];
+                    
+                    // Başlangıç ve bitiş noktalarını indekslerden geri al
+                    startNode = data.startNodeIndex !== null && data.startNodeIndex !== undefined && nodes[data.startNodeIndex] ? nodes[data.startNodeIndex] : null;
+                    endNode = data.endNodeIndex !== null && data.endNodeIndex !== undefined && nodes[data.endNodeIndex] ? nodes[data.endNodeIndex] : null;
+
+                    // Görseli yükle
+                    if (data.imageUrl && data.imageUrl !== floorPlanImage.src) { // Sadece farklıysa yükle
+                        floorPlanImage.src = data.imageUrl;
+                        // floorPlanImage.onload, görsel yüklendikten sonra draw() çağıracak
+                    } else {
+                        draw(); // Görsel aynıysa veya yoksa mevcut durumu çiz
+                    }
+                    showMessage('Grafik verileri başarıyla yüklendi!', 'success');
+                    console.log('Document data:', data);
+                } else {
+                    showMessage('Kayıtlı grafik verisi bulunamadı.', 'info');
+                    console.log('No such document!');
+                }
+            } catch (e) {
+                console.error('Error getting document: ', e);
+                showMessage('Grafik verileri yüklenemedi: ' + e.message, 'error');
+            }
+        }
+
+        // Kaydet ve Yükle butonları olay dinleyicileri
+        saveGraphBtn.addEventListener('click', saveGraphData);
+        loadGraphBtn.addEventListener('click', loadGraphData);
+
+        // Sayfa yüklendiğinde ve Firebase başlatıldığında
+        window.onload = async function() {
+            // Firebase'i başlat
+            const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+
+            if (firebaseConfig) {
+                try {
+                    app = initializeApp(firebaseConfig);
+                    db = getFirestore(app);
+                    auth = getAuth(app);
+
+                    // Kullanıcı girişi (anonim veya özel token ile)
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    userId = auth.currentUser?.uid || crypto.randomUUID();
+                    appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                    console.log('Firebase initialized and user signed in:', userId);
+                    showMessage('Veritabanına bağlanıldı.', 'success');
+                    loadGraphData(); // Veritabanından verileri yüklemeyi dene
+                    startAutoSave(); // Otomatik kaydı başlat
+                } catch (error) {
+                    console.error('Firebase başlatma veya kimlik doğrulama başarısız:', error);
+                    showMessage('Veritabanına bağlanılamadı. Kayıt ve yükleme özellikleri devre dışı.', 'error');
+                }
+            } else {
+                showMessage('Firebase yapılandırması bulunamadı. Kayıt özelliği devre dışı.', 'error');
+                console.warn('Firebase config is not defined. Data persistence will not work.');
+            }
+
+            // Başlangıç görselini yükle
+            const initialImageSrc = uploadedImage.src;
+            if (initialImageSrc && initialImageSrc !== window.location.href + '/') {
+                floorPlanImage.src = initialImageSrc;
+            } else {
+                noImageText.classList.remove('hidden');
+                uploadedImage.classList.add('hidden');
+            }
+        };
+
+        // Pencere yeniden boyutlandırıldığında canvas'ı yeniden çiz
+        window.addEventListener('resize', () => {
+            if (floorPlanImage.src && floorPlanImage.naturalWidth > 0) {
+                // Görselin doğal boyutlarını koruyarak canvas'ın internal boyutunu ayarla
+                canvas.width = floorPlanImage.naturalWidth;
+                canvas.height = floorPlanImage.naturalHeight;
+                draw(); // Yeniden boyutlandıktan sonra tekrar çiz
+            }
+        });
+    </script>
+</body>
+</html>
